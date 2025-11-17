@@ -1,5 +1,5 @@
-from langchain.schema.document import Document
-from langchain_community.vectorstores import Chroma
+from langchain_core.documents import Document
+from langchain_chroma import Chroma
 import os
 import shutil
 from embeddings import get_embedding_function

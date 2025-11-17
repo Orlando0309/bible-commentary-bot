@@ -1,21 +1,54 @@
-from langchain_community.document_loaders import PyPDFDirectoryLoader
+"""
+Data Ingestion Module with Smart Chunking
+Handles loading PDFs and creating smart semantic chunks for the vector database.
+"""
+import os
+from langchain_community.document_loaders import PyPDFDirectoryLoader, PyPDFLoader
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
 from create_database import add_to_chroma
-from secret import DATA_PATH
 from embeddings import get_chunking_embedding_function
+from config import RAGConfig
 
 
-def load_documents():
-    document_loader = PyPDFDirectoryLoader(DATA_PATH)
-    return document_loader.load()
+def load_documents(data_path: str):
+    """
+    Load PDF documents from a file or directory.
+    
+    Args:
+        data_path: Path to a single PDF file or directory containing PDF files
+    
+    Returns:
+        List of loaded documents
+    """
+    if os.path.isfile(data_path):
+        # Single PDF file
+        if not data_path.lower().endswith('.pdf'):
+            raise ValueError(f"File must be a PDF: {data_path}")
+        document_loader = PyPDFLoader(data_path)
+        return document_loader.load()
+    elif os.path.isdir(data_path):
+        # Directory of PDFs
+        document_loader = PyPDFDirectoryLoader(data_path)
+        return document_loader.load()
+    else:
+        raise ValueError(f"Path does not exist: {data_path}")
 
 
-def split_documents(documents: list[Document], chunk: int):
-    """Basic splitting function (kept for backward compatibility)."""
+def split_documents_basic(documents: list[Document], chunk: int):
+    """
+    Basic splitting function (kept for backward compatibility).
+    
+    Args:
+        documents: List of documents to split
+        chunk: Chunk size in characters
+    
+    Returns:
+        List of Document chunks
+    """
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk,
         chunk_overlap=chunk // 10,
@@ -141,24 +174,54 @@ def smart_split_documents(
     return all_chunks
 
 
-if __name__ == "__main__":
-    from config import RAGConfig
+def ingest_documents(data_path: str):
+    """
+    Main ingestion function: Load, chunk, and add documents to vector database.
+    Uses smart semantic chunking by default (configured in config.py).
     
-    # Print configuration
-    print("Using smart chunking with the following configuration:")
+    Args:
+        data_path: Path to the directory containing PDF files to ingest
+    """
+    print("=" * 60)
+    print("DOCUMENT INGESTION")
+    print("=" * 60)
+    
+    # Get configuration
     chunking_config = RAGConfig.get_chunking_config()
+    
+    # Determine if it's a file or directory
+    if os.path.isfile(data_path):
+        print(f"\nPDF file: {data_path}")
+    else:
+        print(f"\nData directory: {data_path}")
+    print(f"Chunking method: Smart (semantic)")
+    print("Configuration:")
     for key, value in chunking_config.items():
         print(f"  {key}: {value}")
     print()
     
     # Load documents
-    documents = load_documents()
+    print("Loading documents...")
+    documents = load_documents(data_path)
+    print(f"Loaded {len(documents)} documents\n")
     
-    # Use smart splitting with config values
-    chunks = smart_split_documents(
-        documents,
-        **chunking_config
-    )
+    # Split documents using smart chunking
+    print("Splitting documents into chunks...")
+    chunks = smart_split_documents(documents, **chunking_config)
+    
+    print()
     
     # Add to database
+    print("Adding chunks to vector database...")
     add_to_chroma(chunks)
+    
+    print("\n" + "=" * 60)
+    print("INGESTION COMPLETE")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    # Example: Run ingestion with default path
+    from secret import DATA_PATH
+    ingest_documents(DATA_PATH)
+
