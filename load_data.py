@@ -4,9 +4,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
-from create_database import add_to_chroma
-from secret import DATA_PATH
-from embeddings import get_chunking_embedding_function
+from src.ingest.create_database import add_to_chroma
+from src.config.secret import DATA_PATH
+from src.agents.embeddings import get_chunking_embedding_function
 
 
 def load_documents():
@@ -142,7 +142,7 @@ def smart_split_documents(
 
 
 if __name__ == "__main__":
-    from config import RAGConfig
+    from src.config import RAGConfig
     
     # Print configuration
     print("Using smart chunking with the following configuration:")

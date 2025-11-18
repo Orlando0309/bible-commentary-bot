@@ -4,41 +4,12 @@ Supports query rephrasing, subqueries, and intelligent retrieval.
 """
 import argparse
 from langchain_core.prompts import ChatPromptTemplate
-from deepagents import create_deep_agent
-from llm import get_llm
-from agent_tools import get_rag_tools, set_llm
-from config import RAGConfig
-from ingest import ingest_documents
-
-
-# System prompt for DeepAgent
-DEEP_AGENT_SYSTEM_PROMPT = """You are an expert Bible commentary researcher. Your job is to conduct thorough research on biblical questions and provide well-researched, accurate answers.
-
-You have access to the following specialized tools:
-
-## `rephrase_query`
-Use this to reformulate a user's query to make it more effective for retrieval. Helpful when the original query is ambiguous or could be expressed more clearly.
-
-## `generate_subqueries`
-Use this to break down complex, multi-part questions into 2-4 simpler, focused subqueries. This is essential for handling questions that ask about multiple aspects or concepts.
-
-## `vector_search`
-Your primary research tool. Use this to search the Bible commentary database for relevant passages. You can specify the number of results to retrieve (default is 5).
-
-## `synthesize_context`
-Use this to combine and synthesize information from multiple search results, especially when you've conducted multiple searches via subqueries.
-
-## Your Approach:
-1. For complex questions, break them down using `generate_subqueries`
-2. If a query is unclear, use `rephrase_query` to optimize it
-3. Conduct thorough research using `vector_search`
-4. Synthesize findings from multiple searches when needed
-5. Base all answers ONLY on retrieved context - never make up information
-6. Cite sources when available
-
-Be methodical, thorough, and always ground your answers in the retrieved biblical commentary.
-Always mention Sources in last part of your answer.
-"""
+from src.agents.agent import create_rag_agent
+from src.agents.llm import get_llm
+from src.agents.tools import get_rag_tools, set_llm
+from src.agents.prompt import DEEP_AGENT_SYSTEM_PROMPT
+from src.config import RAGConfig
+from src.ingest.ingest import ingest_documents
 
 
 # Simple prompt for direct answer generation (fallback)
@@ -53,37 +24,16 @@ Answer the question based on the above context: {question}
 """
 
 
-def create_rag_agent(llm):
-    """
-    Create a RAG agent using DeepAgents framework.
-    
-    Args:
-        llm: The language model to use
-    
-    Returns:
-        DeepAgent instance
-    """
-    # Set the LLM for tools
-    set_llm(llm)
-    
-    # Get all RAG tools
-    tools = get_rag_tools()
-    
-    # Create deep agent with tools and system prompt
-    agent = create_deep_agent(
-        tools=tools,
-        system_prompt=DEEP_AGENT_SYSTEM_PROMPT,
-        model=llm
-    )
-    
-    return agent
+
 
 
 def query_with_agent(
     query_text: str,
     provider: str = None,
     model: str = None,
-    use_agent: bool = True
+    use_agent: bool = True,
+    enable_memory: bool = None,
+    enable_checkpointing: bool = None
 ):
     """
     Query the Bible commentary database using advanced RAG with agents.
@@ -93,6 +43,8 @@ def query_with_agent(
         provider: LLM provider ("openai" or "ollama") - uses config default if None
         model: Specific model name (optional) - uses config default if None
         use_agent: Whether to use agent workflow (True) or simple retrieval (False)
+        enable_memory: Enable long-term memory (uses config default if None)
+        enable_checkpointing: Enable conversation checkpointing (uses config default if None)
     
     Returns:
         Response text and sources
@@ -106,12 +58,23 @@ def query_with_agent(
     
     temperature = llm_config.get("temperature", 0.7)
     
+    # Get memory config
+    memory_config = RAGConfig.get_memory_config()
+    if enable_memory is None:
+        enable_memory = memory_config.get("enable_memory", True)
+    if enable_checkpointing is None:
+        enable_checkpointing = memory_config.get("enable_checkpointing", False)
+    
     # Get the LLM
     llm = get_llm(provider=provider, model=model, temperature=temperature)
     
     if use_agent:
-        # Use DeepAgent-based approach
-        agent = create_rag_agent(llm)
+        # Use DeepAgent-based approach with memory
+        agent = create_rag_agent(
+            llm,
+            enable_memory=enable_memory,
+            enable_checkpointing=enable_checkpointing
+        )
         
         try:
             # DeepAgent expects messages format
@@ -124,7 +87,8 @@ def query_with_agent(
             # Extract the response from the last message
             response_text = result["messages"][-1].content
             
-            formatted_response = f"\nResponse: {response_text}\n\nThis response was generated using DeepAgents workflow with planning and tool orchestration."
+            memory_status = " with memory" if enable_memory else ""
+            formatted_response = f"\nResponse: {response_text}\n\nThis response was generated using DeepAgents workflow{memory_status} with planning and tool orchestration."
             print(formatted_response)
             return response_text
         
@@ -135,8 +99,8 @@ def query_with_agent(
     
     if not use_agent:
         # Fallback to simple retrieval (original approach)
-        from embeddings import get_embedding_function
-        from secret import CHROMA_PATH
+        from src.agents.embeddings import get_embedding_function
+        from src.config.secret import CHROMA_PATH
         from langchain_chroma import Chroma
         
         embedding_function = get_embedding_function()
@@ -203,7 +167,34 @@ Examples:
         help="Query the Bible commentary database"
     )
     
+    # Memory options
+    parser.add_argument(
+        "--memory",
+        action="store_true",
+        default=None,
+        help="Enable long-term memory (agent can remember across sessions)"
+    )
+    parser.add_argument(
+        "--no-memory",
+        action="store_true",
+        help="Disable long-term memory"
+    )
+    parser.add_argument(
+        "--checkpointing",
+        action="store_true",
+        help="Enable conversation checkpointing"
+    )
+    
     args = parser.parse_args()
+    
+    # Determine memory settings
+    enable_memory = None
+    if args.memory:
+        enable_memory = True
+    elif hasattr(args, 'no_memory') and args.no_memory:
+        enable_memory = False
+    
+    enable_checkpointing = args.checkpointing if hasattr(args, 'checkpointing') else None
     
     # Handle ingestion mode
     if args.ingest:
@@ -224,7 +215,9 @@ Examples:
             args.query,
             provider=None,  # Uses config default
             model=None,  # Uses config default
-            use_agent=True  # Always use agent-based workflow
+            use_agent=True,  # Always use agent-based workflow
+            enable_memory=enable_memory,  # Uses config default if None
+            enable_checkpointing=enable_checkpointing  # Uses config default if None
         )
 
 

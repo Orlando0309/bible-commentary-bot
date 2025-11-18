@@ -7,8 +7,8 @@ from langchain.tools import tool
 from langchain_chroma import Chroma
 from langchain_core.prompts import PromptTemplate
 
-from embeddings import get_embedding_function
-from secret import CHROMA_PATH
+from src.agents.embeddings import get_embedding_function
+from src.config.secret import CHROMA_PATH
 
 
 # Global variable to store the LLM (will be set when creating the agent)

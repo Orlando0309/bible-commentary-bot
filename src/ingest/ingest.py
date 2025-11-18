@@ -9,9 +9,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
-from create_database import add_to_chroma
-from embeddings import get_chunking_embedding_function
-from config import RAGConfig
+from src.ingest.create_database import add_to_chroma
+from src.agents.embeddings import get_chunking_embedding_function
+from src.config import RAGConfig
 
 
 def load_documents(data_path: str):
@@ -222,6 +222,6 @@ def ingest_documents(data_path: str):
 
 if __name__ == "__main__":
     # Example: Run ingestion with default path
-    from secret import DATA_PATH
+    from src.config.secret import DATA_PATH
     ingest_documents(DATA_PATH)
 

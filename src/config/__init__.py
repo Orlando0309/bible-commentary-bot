@@ -29,6 +29,11 @@ class RAGConfig:
     # Embedding Configuration
     CHUNKING_EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # sentence-transformers model
     
+    # Memory Configuration
+    ENABLE_MEMORY = True  # Enable long-term memory across conversations
+    ENABLE_CHECKPOINTING = False  # Enable conversation checkpointing
+    CHECKPOINT_DB_PATH = "checkpoints.db"  # Path to checkpoint database
+    
     @classmethod
     def get_llm_config(cls) -> Dict[str, Any]:
         """
@@ -119,6 +124,25 @@ class RAGConfig:
         }
     
     @classmethod
+    def get_memory_config(cls) -> Dict[str, Any]:
+        """
+        Get memory configuration.
+        
+        Environment variables:
+        - ENABLE_MEMORY: Enable long-term memory (true/false)
+        - ENABLE_CHECKPOINTING: Enable conversation checkpointing (true/false)
+        - CHECKPOINT_DB_PATH: Path to checkpoint database
+        
+        Returns:
+            Dictionary with memory configuration
+        """
+        return {
+            "enable_memory": os.getenv("ENABLE_MEMORY", str(cls.ENABLE_MEMORY)).lower() == "true",
+            "enable_checkpointing": os.getenv("ENABLE_CHECKPOINTING", str(cls.ENABLE_CHECKPOINTING)).lower() == "true",
+            "checkpoint_db_path": os.getenv("CHECKPOINT_DB_PATH", cls.CHECKPOINT_DB_PATH)
+        }
+    
+    @classmethod
     def get_all_config(cls) -> Dict[str, Dict[str, Any]]:
         """
         Get all configuration settings.
@@ -129,7 +153,8 @@ class RAGConfig:
         return {
             "llm": cls.get_llm_config(),
             "chunking": cls.get_chunking_config(),
-            "retrieval": cls.get_retrieval_config()
+            "retrieval": cls.get_retrieval_config(),
+            "memory": cls.get_memory_config()
         }
     
     @classmethod
@@ -152,6 +177,10 @@ class RAGConfig:
         
         print("\n[Retrieval Configuration]")
         for key, value in config["retrieval"].items():
+            print(f"  {key}: {value}")
+        
+        print("\n[Memory Configuration]")
+        for key, value in config["memory"].items():
             print(f"  {key}: {value}")
         
         print("=" * 60)

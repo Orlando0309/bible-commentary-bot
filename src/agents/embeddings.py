@@ -24,3 +24,4 @@ def get_chunking_embedding_function():
     # Using a lightweight and fast model for chunking
     model = SentenceTransformer('all-MiniLM-L6-v2')
     return model
+

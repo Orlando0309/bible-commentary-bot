@@ -2,8 +2,8 @@ from langchain_core.documents import Document
 from langchain_chroma import Chroma
 import os
 import shutil
-from embeddings import get_embedding_function
-from secret import CHROMA_PATH
+from src.agents.embeddings import get_embedding_function
+from src.config.secret import CHROMA_PATH
 
 
 def add_to_chroma(chunks: list[Document]):
